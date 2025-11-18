@@ -12,8 +12,7 @@ use ring::{
     rand::{SecureRandom, SystemRandom},
 };
 use serde::{Deserialize, Serialize};
-use std::num::Wrapping;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::ZeroizeOnDrop;
 
 /// Ed25519 keypair for signing and verification
 #[derive(Clone)]
@@ -45,9 +44,9 @@ impl KeyPair {
         }
     }
 
-    /// Sign a message
-    pub fn sign(&self, message: &[u8]) -> Vec<u8> {
-        self.signing_key.sign(message).to_bytes().to_vec()
+    /// Sign a message (returns fixed-size signature)
+    pub fn sign(&self, message: &[u8]) -> [u8; 64] {
+        self.signing_key.sign(message).to_bytes()
     }
 
     /// Get the signing key bytes
@@ -100,9 +99,11 @@ pub fn hash_blake3_keyed(key: &[u8; 32], data: &[u8]) -> [u8; 32] {
     *hasher.finalize().as_bytes()
 }
 
-/// AES-256-GCM encryption key
+/// AES-256-GCM encryption key with proper key zeroization
 #[derive(ZeroizeOnDrop)]
 pub struct EncryptionKey {
+    // Store key material separately for proper zeroization
+    key_bytes: [u8; 32],
     #[zeroize(skip)]
     sealing_key: Option<SealingKey<Counter>>,
     #[zeroize(skip)]
@@ -133,6 +134,7 @@ impl EncryptionKey {
         let opening_key = OpeningKey::new(unbound_key, Counter::new());
 
         Ok(Self {
+            key_bytes: *key_bytes,
             sealing_key: Some(sealing_key),
             opening_key: Some(opening_key),
         })
@@ -171,26 +173,30 @@ impl EncryptionKey {
     }
 }
 
-/// Nonce counter for AES-GCM
+/// Nonce counter for AES-GCM with overflow protection
 struct Counter {
-    counter: Wrapping<u64>,
+    counter: u64,
 }
 
 impl Counter {
     fn new() -> Self {
-        Self {
-            counter: Wrapping(0),
-        }
+        Self { counter: 0 }
     }
 }
 
 impl NonceSequence for Counter {
     fn advance(&mut self) -> core::result::Result<Nonce, Unspecified> {
+        // Critical: Prevent nonce reuse by checking for overflow
+        // After 2^64 operations, we must fail rather than wrap
+        if self.counter == u64::MAX {
+            return Err(Unspecified);
+        }
+
         let mut nonce_bytes = [0u8; 12];
-        let counter_bytes = self.counter.0.to_le_bytes();
+        let counter_bytes = self.counter.to_le_bytes();
         nonce_bytes[4..12].copy_from_slice(&counter_bytes);
 
-        self.counter += Wrapping(1);
+        self.counter = self.counter.checked_add(1).ok_or(Unspecified)?;
 
         Nonce::try_assume_unique_for_key(&nonce_bytes)
     }

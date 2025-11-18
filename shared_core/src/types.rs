@@ -57,11 +57,16 @@ impl Timestamp {
     }
 
     /// Get the current timestamp
+    /// If system time goes backwards (e.g., clock adjustment), returns 0
     pub fn now() -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
         let duration = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
+            .unwrap_or_else(|_| {
+                // Handle time going backwards gracefully
+                // This can happen with NTP adjustments or manual clock changes
+                std::time::Duration::from_secs(0)
+            });
         Self(duration.as_millis() as u64)
     }
 

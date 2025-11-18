@@ -24,7 +24,7 @@ pub struct FrameworkConfig {
 impl Default for FrameworkConfig {
     fn default() -> Self {
         Self {
-            workers: num_cpus::get(),
+            workers: std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4),
         }
     }
 }

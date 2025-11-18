@@ -5,11 +5,11 @@
 
 use crate::{Result, SystemError};
 use async_trait::async_trait;
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Plugin metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -242,18 +242,18 @@ impl PluginOutput {
     }
 }
 
-/// Plugin registry for managing loaded plugins
+/// Plugin registry for managing loaded plugins with concurrent access
 pub struct PluginRegistry {
-    plugins: Arc<RwLock<HashMap<String, Box<dyn Plugin>>>>,
-    states: Arc<RwLock<HashMap<String, PluginState>>>,
+    plugins: Arc<DashMap<String, Box<dyn Plugin>>>,
+    states: Arc<DashMap<String, PluginState>>,
 }
 
 impl PluginRegistry {
     /// Create a new plugin registry
     pub fn new() -> Self {
         Self {
-            plugins: Arc::new(RwLock::new(HashMap::new())),
-            states: Arc::new(RwLock::new(HashMap::new())),
+            plugins: Arc::new(DashMap::new()),
+            states: Arc::new(DashMap::new()),
         }
     }
 
@@ -261,10 +261,7 @@ impl PluginRegistry {
     pub async fn register(&self, plugin: Box<dyn Plugin>) -> Result<()> {
         let id = plugin.metadata().id.clone();
 
-        let mut plugins = self.plugins.write().await;
-        let mut states = self.states.write().await;
-
-        if plugins.contains_key(&id) {
+        if self.plugins.contains_key(&id) {
             return Err(SystemError::Validation {
                 field: "plugin_id".into(),
                 reason: format!("Plugin with ID '{}' already registered", id),
@@ -272,33 +269,28 @@ impl PluginRegistry {
             });
         }
 
-        states.insert(id.clone(), PluginState::Loaded);
-        plugins.insert(id, plugin);
+        self.states.insert(id.clone(), PluginState::Loaded);
+        self.plugins.insert(id, plugin);
 
         Ok(())
     }
 
     /// Unregister a plugin
     pub async fn unregister(&self, plugin_id: &str) -> Result<()> {
-        let mut plugins = self.plugins.write().await;
-        let mut states = self.states.write().await;
-
-        plugins.remove(plugin_id).ok_or_else(|| SystemError::Validation {
+        self.plugins.remove(plugin_id).ok_or_else(|| SystemError::Validation {
             field: "plugin_id".into(),
             reason: format!("Plugin '{}' not found", plugin_id),
             value: Some(plugin_id.to_string()),
         })?;
 
-        states.insert(plugin_id.to_string(), PluginState::Unloaded);
+        self.states.insert(plugin_id.to_string(), PluginState::Unloaded);
 
         Ok(())
     }
 
     /// Get a plugin by ID
     pub async fn get(&self, plugin_id: &str) -> Result<String> {
-        let plugins = self.plugins.read().await;
-
-        plugins
+        self.plugins
             .get(plugin_id)
             .map(|p| p.metadata().name.clone())
             .ok_or_else(|| SystemError::Validation {
@@ -310,88 +302,75 @@ impl PluginRegistry {
 
     /// Initialize a plugin
     pub async fn initialize(&self, plugin_id: &str) -> Result<()> {
-        let mut plugins = self.plugins.write().await;
-        let mut states = self.states.write().await;
-
-        let plugin = plugins.get_mut(plugin_id).ok_or_else(|| SystemError::Validation {
+        let mut plugin_entry = self.plugins.get_mut(plugin_id).ok_or_else(|| SystemError::Validation {
             field: "plugin_id".into(),
             reason: format!("Plugin '{}' not found", plugin_id),
             value: Some(plugin_id.to_string()),
         })?;
 
-        plugin.initialize().await?;
-        states.insert(plugin_id.to_string(), PluginState::Ready);
+        plugin_entry.initialize().await?;
+        self.states.insert(plugin_id.to_string(), PluginState::Ready);
 
         Ok(())
     }
 
     /// Start a plugin
     pub async fn start(&self, plugin_id: &str) -> Result<()> {
-        let mut plugins = self.plugins.write().await;
-        let mut states = self.states.write().await;
-
-        let plugin = plugins.get_mut(plugin_id).ok_or_else(|| SystemError::Validation {
+        let mut plugin_entry = self.plugins.get_mut(plugin_id).ok_or_else(|| SystemError::Validation {
             field: "plugin_id".into(),
             reason: format!("Plugin '{}' not found", plugin_id),
             value: Some(plugin_id.to_string()),
         })?;
 
-        plugin.start().await?;
-        states.insert(plugin_id.to_string(), PluginState::Active);
+        plugin_entry.start().await?;
+        self.states.insert(plugin_id.to_string(), PluginState::Active);
 
         Ok(())
     }
 
     /// Stop a plugin
     pub async fn stop(&self, plugin_id: &str) -> Result<()> {
-        let mut plugins = self.plugins.write().await;
-        let mut states = self.states.write().await;
-
-        let plugin = plugins.get_mut(plugin_id).ok_or_else(|| SystemError::Validation {
+        let mut plugin_entry = self.plugins.get_mut(plugin_id).ok_or_else(|| SystemError::Validation {
             field: "plugin_id".into(),
             reason: format!("Plugin '{}' not found", plugin_id),
             value: Some(plugin_id.to_string()),
         })?;
 
-        plugin.stop().await?;
-        states.insert(plugin_id.to_string(), PluginState::Ready);
+        plugin_entry.stop().await?;
+        self.states.insert(plugin_id.to_string(), PluginState::Ready);
 
         Ok(())
     }
 
-    /// Execute a plugin
+    /// Execute a plugin (now with concurrent access via DashMap)
     pub async fn execute(&self, plugin_id: &str, input: PluginInput) -> Result<PluginOutput> {
-        let mut plugins = self.plugins.write().await;
-
-        let plugin = plugins.get_mut(plugin_id).ok_or_else(|| SystemError::Validation {
+        let mut plugin_entry = self.plugins.get_mut(plugin_id).ok_or_else(|| SystemError::Validation {
             field: "plugin_id".into(),
             reason: format!("Plugin '{}' not found", plugin_id),
             value: Some(plugin_id.to_string()),
         })?;
 
-        plugin.execute(input).await
+        plugin_entry.execute(input).await
     }
 
     /// List all registered plugins
     pub async fn list(&self) -> Vec<PluginMetadata> {
-        let plugins = self.plugins.read().await;
-        plugins.values().map(|p| p.metadata().clone()).collect()
+        self.plugins.iter().map(|entry| entry.metadata().clone()).collect()
     }
 
-    /// Get plugin state
-    pub async fn get_state(&self, plugin_id: &str) -> Option<PluginState> {
-        let states = self.states.read().await;
-        states.get(plugin_id).copied()
+    /// Get plugin state (now synchronous with DashMap)
+    pub fn get_state(&self, plugin_id: &str) -> Option<PluginState> {
+        self.states.get(plugin_id).map(|s| *s)
     }
 
     /// Health check all plugins
-    pub async fn health_check_all(&self) -> HashMap<String, Result<()>> {
-        let plugins = self.plugins.read().await;
-        let mut results = HashMap::new();
+    pub async fn health_check_all(&self) -> std::collections::HashMap<String, Result<()>> {
+        let mut results = std::collections::HashMap::new();
 
-        for (id, plugin) in plugins.iter() {
-            let result = plugin.health_check().await;
-            results.insert(id.clone(), result);
+        for entry in self.plugins.iter() {
+            let id = entry.metadata().id.clone();
+            let result = entry.health_check().await;
+            results.insert(id, result);
         }
 
         results
@@ -518,11 +497,11 @@ mod tests {
 
         // Initialize plugin
         registry.initialize("test-plugin").await.unwrap();
-        assert_eq!(registry.get_state("test-plugin").await, Some(PluginState::Ready));
+        assert_eq!(registry.get_state("test-plugin"), Some(PluginState::Ready));
 
         // Start plugin
         registry.start("test-plugin").await.unwrap();
-        assert_eq!(registry.get_state("test-plugin").await, Some(PluginState::Active));
+        assert_eq!(registry.get_state("test-plugin"), Some(PluginState::Active));
 
         // Execute plugin
         let input = PluginInput::new();
@@ -531,11 +510,11 @@ mod tests {
 
         // Stop plugin
         registry.stop("test-plugin").await.unwrap();
-        assert_eq!(registry.get_state("test-plugin").await, Some(PluginState::Ready));
+        assert_eq!(registry.get_state("test-plugin"), Some(PluginState::Ready));
 
         // Unregister plugin
         registry.unregister("test-plugin").await.unwrap();
-        assert_eq!(registry.get_state("test-plugin").await, Some(PluginState::Unloaded));
+        assert_eq!(registry.get_state("test-plugin"), Some(PluginState::Unloaded));
     }
 
     #[tokio::test]

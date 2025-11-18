@@ -4,13 +4,51 @@
 //! Supports CPU caps, RAM limits, I/O throttling, deterministic mode, and sandbox mode.
 
 use crate::{Result, SystemError};
-use rand::SeedableRng;
+use rand::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{Semaphore, RwLock};
+use tokio::sync::{Notify, Semaphore, RwLock};
 use tokio::time::sleep;
+
+/// Zero-allocation RNG wrapper for deterministic and non-deterministic modes
+pub enum GovernorRng {
+    /// Deterministic RNG with fixed seed
+    Deterministic(rand::rngs::StdRng),
+    /// Non-deterministic thread RNG
+    Random(rand::rngs::ThreadRng),
+}
+
+impl RngCore for GovernorRng {
+    fn next_u32(&mut self) -> u32 {
+        match self {
+            GovernorRng::Deterministic(rng) => rng.next_u32(),
+            GovernorRng::Random(rng) => rng.next_u32(),
+        }
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        match self {
+            GovernorRng::Deterministic(rng) => rng.next_u64(),
+            GovernorRng::Random(rng) => rng.next_u64(),
+        }
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        match self {
+            GovernorRng::Deterministic(rng) => rng.fill_bytes(dest),
+            GovernorRng::Random(rng) => rng.fill_bytes(dest),
+        }
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> std::result::Result<(), rand::Error> {
+        match self {
+            GovernorRng::Deterministic(rng) => rng.try_fill_bytes(dest),
+            GovernorRng::Random(rng) => rng.try_fill_bytes(dest),
+        }
+    }
+}
 
 /// Resource governor configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +152,7 @@ pub struct ResourceGovernor {
 
     // State
     is_paused: Arc<AtomicBool>,
+    pause_notify: Arc<Notify>,
     total_operations: Arc<AtomicU64>,
     throttled_operations: Arc<AtomicU64>,
 }
@@ -132,6 +171,7 @@ impl ResourceGovernor {
             io_ops_count: Arc::new(AtomicU64::new(0)),
             io_window_start: Arc::new(RwLock::new(Instant::now())),
             is_paused: Arc::new(AtomicBool::new(false)),
+            pause_notify: Arc::new(Notify::new()),
             total_operations: Arc::new(AtomicU64::new(0)),
             throttled_operations: Arc::new(AtomicU64::new(0)),
         })
@@ -141,9 +181,9 @@ impl ResourceGovernor {
     pub async fn acquire_permit(&self) -> Result<OperationPermit> {
         self.total_operations.fetch_add(1, Ordering::Relaxed);
 
-        // Check if paused
+        // Efficient pause handling using Notify instead of busy-wait
         while self.is_paused.load(Ordering::Relaxed) {
-            sleep(Duration::from_millis(100)).await;
+            self.pause_notify.notified().await;
         }
 
         // Acquire concurrency permit
@@ -252,6 +292,8 @@ impl ResourceGovernor {
     /// Resume operations
     pub fn resume(&self) {
         self.is_paused.store(false, Ordering::Relaxed);
+        // Notify all waiting tasks that we've resumed
+        self.pause_notify.notify_waiters();
     }
 
     /// Check if in deterministic mode
@@ -282,13 +324,14 @@ impl ResourceGovernor {
     }
 
     /// Get random number generator (deterministic if in deterministic mode)
-    pub fn get_rng(&self) -> Box<dyn rand::RngCore> {
+    /// Returns enum-based RNG to avoid heap allocation
+    pub fn get_rng(&self) -> GovernorRng {
         if self.config.deterministic_mode {
             // Use seeded RNG for deterministic execution
-            Box::new(rand::rngs::StdRng::seed_from_u64(42))
+            GovernorRng::Deterministic(rand::rngs::StdRng::seed_from_u64(42))
         } else {
             // Use thread RNG for non-deterministic execution
-            Box::new(rand::thread_rng())
+            GovernorRng::Random(rand::thread_rng())
         }
     }
 }
@@ -304,6 +347,7 @@ impl Clone for ResourceGovernor {
             io_window_start: Arc::clone(&self.io_window_start),
             operation_semaphore: Arc::clone(&self.operation_semaphore),
             is_paused: Arc::clone(&self.is_paused),
+            pause_notify: Arc::clone(&self.pause_notify),
             total_operations: Arc::clone(&self.total_operations),
             throttled_operations: Arc::clone(&self.throttled_operations),
         }
