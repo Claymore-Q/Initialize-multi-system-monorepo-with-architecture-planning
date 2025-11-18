@@ -1,0 +1,28 @@
+[package]
+name = "dynamic_semantic_lattice_engine"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Semantic reasoning with lattice-based knowledge representation"
+
+[dependencies]
+shared_core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+dashmap = { workspace = true }
+
+# Graph algorithms
+petgraph = "0.6"
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[features]
+default = []

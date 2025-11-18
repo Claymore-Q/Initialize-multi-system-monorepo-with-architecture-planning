@@ -1,0 +1,29 @@
+[package]
+name = "universal_attestation_authority"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Cryptographic attestation and verification service"
+
+[dependencies]
+shared_core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+dashmap = { workspace = true }
+
+# Additional crypto
+ed25519-dalek = { workspace = true }
+blake3 = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[features]
+default = []

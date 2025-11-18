@@ -1,0 +1,133 @@
+[workspace]
+resolver = "2"
+members = [
+    "chaos_engine",
+    "contract_executable_compiler",
+    "cross_domain_auto_learner",
+    "dynamic_semantic_lattice_engine",
+    "linux_scalable_cloud_kernel/userspace",
+    "parallel_architecture_framework",
+    "symbolic_reduction_modeler",
+    "synthetic_pipeline_engine",
+    "universal_attestation_authority",
+    "cross_domain_autoblocker_ledger",
+    "shared_core",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.81"
+authors = ["Semantic Notary Team"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Claymore-Q/Semantic-Notary"
+
+[workspace.dependencies]
+# Async runtime and futures
+tokio = { version = "1.35", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+toml = "0.8"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging and telemetry
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "ansi"] }
+tracing-appender = "0.2"
+opentelemetry = { version = "0.21", features = ["trace", "metrics"] }
+opentelemetry-otlp = "0.14"
+
+# Metrics
+metrics = "0.21"
+metrics-exporter-prometheus = "0.13"
+
+# Cryptography
+ring = "0.17"
+ed25519-dalek = { version = "2.1", features = ["serde"] }
+blake3 = "1.5"
+sha3 = "0.10"
+aes-gcm = "0.10"
+rustls = { version = "0.21", features = ["dangerous_configuration"] }
+rustls-pemfile = "1.0"
+x509-parser = "0.15"
+zeroize = { version = "1.7", features = ["derive"] }
+
+# Data structures
+dashmap = "5.5"
+crossbeam = "0.8"
+parking_lot = "0.12"
+
+# Configuration
+config = "0.13"
+clap = { version = "4.4", features = ["derive", "env"] }
+
+# Validation
+validator = { version = "0.16", features = ["derive"] }
+regex = "1.10"
+
+# Time and date
+chrono = { version = "0.4", features = ["serde"] }
+humantime = "2.1"
+
+# Networking
+tonic = "0.10"
+prost = "0.12"
+tonic-build = "0.10"
+hyper = { version = "0.14", features = ["full"] }
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+
+# Database (optional for systems that need persistence)
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "postgres"] }
+
+# Filesystem
+walkdir = "2.4"
+tempfile = "3.8"
+
+# Compression
+zstd = "0.13"
+flate2 = "1.0"
+
+# Random
+rand = "0.8"
+rand_core = "0.6"
+
+# Shared core library
+shared_core = { path = "./shared_core", version = "0.1.0" }
+
+# Testing and benchmarking
+proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+quickcheck = "1.0"
+fake = "2.9"
+wiremock = "0.5"
+assert_cmd = "2.0"
+predicates = "3.0"
+
+[profile.dev]
+opt-level = 0
+debug = true
+incremental = true
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[profile.bench]
+inherits = "release"
+debug = true
+
+[profile.test]
+opt-level = 1
+debug = true

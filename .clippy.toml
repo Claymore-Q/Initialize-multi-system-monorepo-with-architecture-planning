@@ -1,0 +1,11 @@
+# Clippy linting configuration
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 30
+
+# Don't warn about these patterns
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+
+# Documentation requirements
+missing-docs-in-crate-items = false

@@ -1,0 +1,32 @@
+[package]
+name = "cross_domain_auto_learner"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Adaptive machine learning across domains"
+
+[dependencies]
+shared_core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# Linear algebra
+ndarray = "0.15"
+ndarray-linalg = "0.16"
+
+# ML utilities
+rand = { workspace = true }
+rand_distr = "0.4"
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[features]
+default = []
