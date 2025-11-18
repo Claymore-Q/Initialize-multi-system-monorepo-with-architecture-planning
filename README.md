@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Multi-System Monorepo
 
 A comprehensive enterprise-grade monorepo containing 10 standalone internal tools built with Rust.
@@ -300,3 +301,7 @@ For questions or discussions, please open an issue in the repository.
 **Architecture**: Deep planning with ~90k tokens of architectural reasoning
 **Quality**: Production-grade scaffolding with comprehensive testing
 **Scale**: Designed to handle enterprise workloads across 10 systems
+=======
+# Initialize-multi-system-monorepo-with-architecture-planning
+Tools
+>>>>>>> 30b3b8e41178fd910fd6e609f0f51bab0e615b96
