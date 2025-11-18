@@ -66,9 +66,4 @@ tempfile = { workspace = true }
 proptest = { workspace = true }
 
 [features]
-default = ["std", "logging", "crypto"]
-std = []
-logging = ["tracing", "tracing-subscriber"]
-telemetry = ["opentelemetry", "opentelemetry-otlp", "metrics"]
-crypto = ["ring", "ed25519-dalek", "blake3", "sha3", "aes-gcm"]
-full = ["logging", "telemetry", "crypto"]
+default = []

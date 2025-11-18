@@ -17,7 +17,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.81"
 authors = ["Semantic Notary Team"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Claymore-Q/Semantic-Notary"
@@ -102,8 +102,7 @@ rand_core = "0.6"
 # Shared core library
 shared_core = { path = "./shared_core", version = "0.1.0" }
 
-# Development dependencies
-[workspace.dependencies.dev]
+# Testing and benchmarking
 proptest = "1.4"
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 quickcheck = "1.0"

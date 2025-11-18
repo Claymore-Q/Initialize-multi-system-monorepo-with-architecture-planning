@@ -29,8 +29,8 @@ fn test_io_error_conversion() {
     let sys_err: SystemError = io_err.into();
 
     match sys_err {
-        SystemError::Io { source, context } => {
-            assert!(source.contains("File not found"));
+        SystemError::Io { message, context } => {
+            assert!(message.contains("File not found"));
             assert!(context.contains("I/O operation failed"));
         }
         _ => panic!("Wrong error type"),
