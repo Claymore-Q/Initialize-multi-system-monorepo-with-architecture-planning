@@ -1,0 +1,28 @@
+[package]
+name = "linux_scalable_cloud_kernel"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Userspace tools for cloud-scale Linux kernel operations"
+
+[dependencies]
+shared_core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# Linux-specific
+nix = { version = "0.27", features = ["fs", "mount", "sched"] }
+libc = "0.2"
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[features]
+default = []
