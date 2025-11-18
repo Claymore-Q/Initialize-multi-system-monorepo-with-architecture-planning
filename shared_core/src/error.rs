@@ -16,10 +16,10 @@ use thiserror::Error;
 #[serde(tag = "type", content = "data")]
 pub enum SystemError {
     /// I/O error with context
-    #[error("I/O error: {context} - {source}")]
+    #[error("I/O error: {context} - {message}")]
     Io {
         /// The underlying I/O error message
-        source: String,
+        message: String,
         /// Additional context about where/why the error occurred
         context: String,
     },
@@ -166,7 +166,7 @@ impl SystemError {
     /// Create an I/O error with context
     pub fn io(source: impl fmt::Display, context: impl Into<String>) -> Self {
         Self::Io {
-            source: source.to_string(),
+            message: source.to_string(),
             context: context.into(),
         }
     }

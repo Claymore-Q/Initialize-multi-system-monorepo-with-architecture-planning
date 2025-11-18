@@ -105,8 +105,6 @@ pub fn init_logging(config: LogConfig) -> Result<Option<WorkerGuard>> {
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(config.level.to_string()));
 
-    let subscriber = Registry::default().with(env_filter);
-
     let guard = if config.log_to_file {
         if let Some(log_path) = &config.log_file_path {
             let file_appender = tracing_appender::rolling::daily(
@@ -117,61 +115,48 @@ pub fn init_logging(config: LogConfig) -> Result<Option<WorkerGuard>> {
             );
             let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-            let file_layer = fmt::layer()
+            let subscriber = tracing_subscriber::fmt()
                 .with_writer(non_blocking)
+                .with_env_filter(env_filter)
                 .json()
-                .with_file(config.include_location)
-                .with_line_number(config.include_location)
-                .with_target(config.include_target)
-                .with_span_events(config.span_events);
+                .finish();
 
-            subscriber
-                .with(file_layer)
-                .with(create_stdout_layer(&config))
-                .init();
+            tracing::subscriber::set_global_default(subscriber)
+                .map_err(|e| SystemError::Concurrency {
+                    message: format!("Failed to set global subscriber: {}", e),
+                    thread_id: None,
+                })?;
 
             Some(guard)
         } else {
-            subscriber.with(create_stdout_layer(&config)).init();
+            init_simple(config)?;
             None
         }
     } else {
-        subscriber.with(create_stdout_layer(&config)).init();
+        init_simple(config)?;
         None
     };
 
     Ok(guard)
 }
 
-fn create_stdout_layer(
-    config: &LogConfig,
-) -> Box<dyn Layer<Registry> + Send + Sync + 'static> {
-    match config.format {
-        LogFormat::Pretty => Box::new(
-            fmt::layer()
-                .pretty()
-                .with_file(config.include_location)
-                .with_line_number(config.include_location)
-                .with_target(config.include_target)
-                .with_span_events(config.span_events),
-        ),
-        LogFormat::Json => Box::new(
-            fmt::layer()
-                .json()
-                .with_file(config.include_location)
-                .with_line_number(config.include_location)
-                .with_target(config.include_target)
-                .with_span_events(config.span_events),
-        ),
-        LogFormat::Compact => Box::new(
-            fmt::layer()
-                .compact()
-                .with_file(config.include_location)
-                .with_line_number(config.include_location)
-                .with_target(config.include_target)
-                .with_span_events(config.span_events),
-        ),
-    }
+fn init_simple(config: LogConfig) -> Result<()> {
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(config.level.to_string()));
+
+    // Simplified: always use JSON format for consistency
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .json()
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .map_err(|e| SystemError::Concurrency {
+            message: format!("Failed to set global subscriber: {}", e),
+            thread_id: None,
+        })?;
+
+    Ok(())
 }
 
 #[cfg(test)]
