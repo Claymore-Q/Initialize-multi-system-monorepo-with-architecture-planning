@@ -99,6 +99,9 @@ flate2 = "1.0"
 rand = "0.8"
 rand_core = "0.6"
 
+# System utilities
+num_cpus = "1.16"
+
 # Shared core library
 shared_core = { path = "./shared_core", version = "0.1.0" }
 
