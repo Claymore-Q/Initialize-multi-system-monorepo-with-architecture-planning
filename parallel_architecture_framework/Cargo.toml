@@ -22,6 +22,7 @@ dashmap = { workspace = true }
 # Parallel execution
 rayon = "1.8"
 crossbeam = { workspace = true }
+num_cpus = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
